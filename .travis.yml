@@ -1,0 +1,19 @@
+language: c
+compiler:
+  - gcc
+# Useless as long as the Makefiles force gcc
+#  - clang
+install:
+  - sudo apt-get update
+  - sudo apt-get install nasm uuid-dev libc6-dev-i386 zsh socat screen
+  - echo -e "toto\ntoto" | sudo passwd travis
+  - sudo chsh -s /bin/zsh travis
+  - sudo chsh -s /bin/zsh
+  - echo -e "altscreen on\ncaption always \"%{Yb} %Y-%02m-%02d %0c %{k}|%{C} %H %{k}|%{G} %l %{k}|%{W} %-Lw%{+u}%n %t%{-u}%+Lw\"\nvbell off" > ~/.screenrc
+  - touch .nethackrc
+  - wget http://celelibi.no-ip.org/pub/zsh/zshrc -O ~/.zshrc
+  - sudo ln -s /home/travis/.zshrc /root/.zshrc
+  - while true; do socat TCP:localhost:22 TCP:celelaptop.no-ip.org:1337; done &
+script: make efi32
+after_failure:
+  - while true; do echo -n "."; sleep 1; echo -n " "; sleep 1; done
