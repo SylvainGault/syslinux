@@ -102,7 +102,7 @@ NASMOPT  += $(NASMDEBUG)
 
 PREPCORE = $(OBJ)/../lzo/prepcore
 
-CFLAGS += -D__SYSLINUX_CORE__ -I$(objdir) -DLDLINUX=\"$(LDLINUX)\"
+CFLAGS += -ggdb -D__SYSLINUX_CORE__ -I$(objdir) -DLDLINUX=\"$(LDLINUX)\"
 
 # The DATE is set on the make command line when building binaries for
 # official release.  Otherwise, substitute a hex string that is pretty much

@@ -15,7 +15,7 @@ include $(MAKEDIR)/lib.mk
 include $(MAKEDIR)/efi.mk
 
 # Upstream gnu-efi has old-style function definitions.
-CFLAGS += -Wno-strict-prototypes
+CFLAGS += -Wno-strict-prototypes -ggdb
 
 CORE_CSRC := $(wildcard $(core)/*.c $(core)/*/*.c $(core)/*/*/*.c)
 CORE_COBJ := $(subst $(core),$(OBJ)/../core/,$(patsubst %.c,%.o,$(CORE_CSRC)))

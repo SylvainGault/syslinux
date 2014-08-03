@@ -76,6 +76,7 @@ void net_parse_dhcp(void)
     uint8_t hardlen;
     uint32_t ip;
     char dst[256];
+    int rv, i;
 
     status = LibLocateHandle(ByProtocol, &PxeBaseCodeProtocol,
 			 NULL, &nr_handles, &handles);
@@ -130,11 +131,20 @@ void net_parse_dhcp(void)
     Print(L"\n");
 
     ip = IPInfo.myip;
-    sprintf(dst, "%u.%u.%u.%u",
+    Print(L"Direct address: %d.%d.%d.%d\n",
+        ((const uint8_t *)&ip)[0],
+        ((const uint8_t *)&ip)[1],
+        ((const uint8_t *)&ip)[2],
+        ((const uint8_t *)&ip)[3]);
+    rv = sprintf(dst, "%u.%u.%u.%u",
         ((const uint8_t *)&ip)[0],
         ((const uint8_t *)&ip)[1],
         ((const uint8_t *)&ip)[2],
         ((const uint8_t *)&ip)[3]);
 
+    Print(L"%d chars written to dst: ", rv);
+    for (i = 0; i <= rv; i++)
+	    Print(L"%02x ", (uint8_t)dst[i]);
+    Print(L"\n");
     Print(L"My IP is %a\n", dst);
 }

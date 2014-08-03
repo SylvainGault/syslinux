@@ -1282,6 +1282,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *table)
 		goto out;
 	}
 
+	Print(L"%s loaded at %016x (%d bytes)\n", info->FilePath, info->ImageBase, info->ImageSize);
+
 	status = uefi_call_wrapper(BS->HandleProtocol, 3, info->DeviceHandle,
 				   &PxeBaseCodeProtocol, (void **)&pxe);
 	if (status != EFI_SUCCESS) {
@@ -1328,6 +1330,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *table)
 	 */
 	in = ST->ConIn;
 	do {
+	while (0) {}
 		status = uefi_call_wrapper(in->ReadKeyStroke, 2, in, &key);
 	} while (status != EFI_NOT_READY);
 
