@@ -14,7 +14,7 @@
 /*
  * extlinux.c
  *
- * Install the syslinux boot block on an fat, ntfs, ext2/3/4, btrfs, xfs,
+ * Install the syslinux boot block on a fat, ntfs, ext2/3/4, btrfs, xfs,
  * and ufs1/2 filesystem.
  */
 
@@ -56,6 +56,7 @@
 #include "version.h"
 #include "syslxint.h"
 #include "syslxcom.h" /* common functions shared with extlinux and syslinux */
+#include "syslxrw.h"
 #include "syslxfs.h"
 #include "setadv.h"
 #include "syslxopt.h" /* unified options */
@@ -392,11 +393,11 @@ int install_bootblock(int fd, const char *device)
 	if (sb5.sb_magicnum == *(u32 *)XFS_SB_MAGIC) {
 	    if (be32_to_cpu(sb5.sb_blocksize) != XFS_SUPPORTED_BLOCKSIZE) {
 		fprintf(stderr,
-			"You need to have 4 KiB filesystem block size for "
-			" being able to install Syslinux in your XFS "
-			"partition (because there is no enough space in MBR to "
-			"determine where Syslinux bootsector can be installed "
-			"regardless the filesystem block size)\n");
+			"You need to have 4 KiB filesystem block size for"
+			" being able to install Syslinux in your XFS"
+			" partition (because there is not enough space in MBR to"
+			" determine where Syslinux bootsector can be installed"
+			" regardless of the filesystem block size)\n");
 		return 1;
 	    }
 
@@ -419,8 +420,8 @@ int install_bootblock(int fd, const char *device)
 
     if (!ok) {
 	fprintf(stderr,
-		"no fat, ntfs, ext2/3/4, btrfs, xfs "
-		"or ufs1/2 superblock found on %s\n",
+		"no fat, ntfs, ext2/3/4, btrfs, xfs"
+		" or ufs1/2 superblock found on %s\n",
 		device);
 	return 1;
     }
@@ -597,9 +598,12 @@ bail:
     return 1;
 }
 
-/* btrfs has to install the ldlinux.sys in the first 64K blank area, which
-   is not managered by btrfs tree, so actually this is not installed as files.
-   since the cow feature of btrfs will move the ldlinux.sys every where */
+/* btrfs has to install ldlinux.sys to a boot area, which is not managed by
+   btrfs tree, so actually this is not installed as a file, since the cow
+   feature of btrfs would move the ldlinux.sys file everywhere. Older
+   versions installed it to the first 64kiB (aka Boot Area A) but as of
+   commit ID 37eef640 (before 6.03-pre12, before 6.03), it is now in Boot
+   Area B (a 768kiB blank space at offset 256kiB). */
 int btrfs_install_file(const char *path, int devfd, struct stat *rst)
 {
     char *file;
@@ -661,7 +665,7 @@ int btrfs_install_file(const char *path, int devfd, struct stat *rst)
  * Due to historical reasons (SGI IRIX's design of disk layouts), the first
  * sector in the primary AG on XFS filesystems contains the superblock, which is
  * a problem with bootloaders that rely on BIOSes (that load VBRs which are
- * (located in the first sector of the partition).
+ * located in the first sector of the partition).
  *
  * Thus, we need to handle this issue, otherwise Syslinux will damage the XFS's
  * superblock.
@@ -750,7 +754,7 @@ bail:
  *  * test if path is a subvolume:
  *   * this function return
  *    * 0-> path exists but it is not a subvolume
- *     * 1-> path exists and it is  a subvolume
+ *     * 1-> path exists and it is a subvolume
  *      * -1 -> path is unaccessible
  *       */
 static int test_issubvolume(char *path)
@@ -1032,12 +1036,12 @@ err:
 }
 
 #ifndef __KLIBC__
-static const char *find_device(const char *mtab_file, dev_t dev)
+static char *find_device(const char *mtab_file, dev_t dev)
 {
     struct mntent *mnt;
     struct stat dst;
     FILE *mtab;
-    const char *devname = NULL;
+    char *devname = NULL;
     bool done;
 
     mtab = setmntent(mtab_file, "r");
@@ -1119,7 +1123,7 @@ static const char *find_device(const char *mtab_file, dev_t dev)
  * On newer Linux kernels we can use sysfs to get a backwards mapping
  * from device names to standard filenames
  */
-static const char *find_device_sysfs(dev_t dev)
+static char *find_device_sysfs(dev_t dev)
 {
     char sysname[64];
     char linkname[PATH_MAX];
@@ -1269,9 +1273,20 @@ err:
     return rv;
 }
 
-static const char *get_devname(const char *path)
+static char *dupname(const char *name)
 {
-    const char *devname = NULL;
+    char *out = NULL;
+    int len = 0;
+    if (name)
+        len = strlen(name);
+    if (len > 0)
+        out = strndup(name, len);
+    return out;
+}
+
+static char *get_devname(const char *path)
+{
+    char *devname = NULL;
     struct stat st;
     struct statfs sfs;
 
@@ -1285,17 +1300,17 @@ static const char *get_devname(const char *path)
     }
 
     if (opt.device)
-	devname = opt.device;
+	devname = strdup(opt.device);
 
     if (!devname){
 	if (fs_type == BTRFS) {
 	    /* For btrfs try to get the device name from btrfs itself */
-	    devname = find_device_btrfs(path);
+	    devname = dupname(find_device_btrfs(path));
 	}
     }
 
     if (!devname) {
-	devname = find_device_mountinfo(path, st.st_dev);
+	devname = dupname(find_device_mountinfo(path, st.st_dev));
     }
 
 #ifdef __KLIBC__
@@ -1314,7 +1329,7 @@ static const char *get_devname(const char *path)
 	}
 
 	atexit(device_cleanup);	/* unlink the device node on exit */
-	devname = devname_buf;
+	devname = dupname(devname_buf);
     }
 
 #else
@@ -1338,10 +1353,10 @@ static const char *get_devname(const char *path)
     return devname;
 }
 
-static int open_device(const char *path, struct stat *st, const char **_devname)
+static int open_device(const char *path, struct stat *st, char **_devname)
 {
     int devfd;
-    const char *devname = NULL;
+    char *devname = NULL;
     struct statfs sfs;
 
     if (st)
@@ -1373,19 +1388,18 @@ static int open_device(const char *path, struct stat *st, const char **_devname)
 
     if (!fs_type) {
 	fprintf(stderr,
-		"%s: not a fat, ntfs, ext2/3/4, btrfs, xfs or"
-		"ufs1/2 filesystem: %s\n",
+		"%s: not a fat, ntfs, ext2/3/4, btrfs, xfs"
+		" or ufs1/2 filesystem: %s\n",
 		program, path);
 	return -1;
     }
 
     devfd = -1;
     devname = get_devname(path);
-    if (_devname)
-	*_devname = devname;
 
     if ((devfd = open(devname, O_RDWR | O_SYNC)) < 0) {
 	fprintf(stderr, "%s: cannot open device %s\n", program, devname);
+	free(devname);
 	return -1;
     }
 
@@ -1393,9 +1407,14 @@ static int open_device(const char *path, struct stat *st, const char **_devname)
     if (validate_device(path, devfd)) {
 	fprintf(stderr, "%s: path %s doesn't match device %s\n",
 		program, path, devname);
+	free(devname);
 	close(devfd);
 	return -1;
     }
+    if (_devname)
+        *_devname = devname;
+    else
+        free(devname);
     return devfd;
 }
 
@@ -1456,7 +1475,7 @@ static int install_loader(const char *path, int update_only)
 {
     struct stat st, fst;
     int devfd, rv;
-    const char *devname;
+    char *devname = NULL;
 
     devfd = open_device(path, &st, &devname);
     if (devfd < 0)
@@ -1496,6 +1515,7 @@ static int install_loader(const char *path, int update_only)
 
     sync();
     rv = install_bootblock(devfd, devname);
+    free(devname);
     close(devfd);
     sync();
 
